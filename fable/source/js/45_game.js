@@ -6,13 +6,18 @@ const GS = {
   chaseYaw: 0, chaseY: 0, chaseInit: false, hoodPos: new Float32Array(6),
   tvData: new Float32Array(64 * 4), tvN: 0, tvCur: -1, tvAim: new Float32Array(3), tvFov: 0.3, pl: new Float64Array(2),
   v3: new Float32Array(6), fxOn: true, frozen: false, freeCam: false,
-  padKeys: 0, lapSeen: 0, lapMax: 0, lapNew: false,
+  padKeys: 0, lapSeen: 0, lapMax: 0, lapNew: false, lapBad: 0, cutS: 0, lapEndT: 0,   // lapBad: 0 volta válida, 1 usou R, 2 quatro rodas fora, 3 atalho
 };
 // Cronômetro: LAP[0] instante (s de simulação) em que a volta atual começou, [1] última volta, [2] melhor volta, [3] 1 = cronômetro correndo
 const LAP = new Float64Array(4);
 // Controle (Gamepad API): PADV[0] gatilho direito, [1] gatilho esquerdo, [2] analógico esquerdo já com zona morta e curva. Preenchido por padPoll.
 const PADV = new Float64Array(3);
 const KEYMAP = { KeyW: K_W, ArrowUp: K_W, KeyS: K_S, ArrowDown: K_S, KeyA: K_A, ArrowLeft: K_A, KeyD: K_D, ArrowRight: K_D, Space: K_SPACE, KeyC: K_C, KeyR: K_R, KeyV: K_V };
+// MOD (fork): tecla C passa por 5 câmeras: perseguição nível 1 (original), nível 2, nível 3, capô, TV.
+// Cada nível da perseguição: [distância atrás do carro, altura da câmera, distância à frente do ponto de mira, altura do ponto de mira]
+let CHASE_LV = 0, CAMSEQ = 0;
+const CHASE_LVS = [[5.3, 1.62, 1.6, 0.95], [7.2, 2.8, 8, 1.1], [6.5, 3.6, 12, 0.9]];
+const CAMMAP = [[0, 0], [0, 1], [0, 2], [1, 0], [2, 0]];   // [GS.cam, nível]
 function onKeyDown(e) { const k = KEYMAP[e.code]; if (k) { GS.held |= k; e.preventDefault(); } }
 function onKeyUp(e) { const k = KEYMAP[e.code]; if (k) { GS.held &= ~k; e.preventDefault(); } }
 function onBlur() { GS.held = 0; }
@@ -122,7 +127,7 @@ async function gamePrewarm() {
 }
 function gameRestart() {
   const V = VEH; V.lapS = 0; V.offCount = 0; V.hits = 0; V.laps = 0; V.time = 0; V.steps = 0; V.spin.fill(0); V.susp.fill(0);
-  vehicleReset(TRK.L + TRK.startS, TRK.startD, 0); GS.held = 0; GS.tick60 = 0; GS.acc = 0; GS.sub = 0; GS.keys = GS.prevKeys = 0; GS.cam = +(Q.get('cam') || 0); GS.chaseInit = false; GS.tvCur = -1; GS.cut = true;
+  vehicleReset(TRK.L + TRK.startS, TRK.startD, 0); GS.held = 0; GS.tick60 = 0; GS.acc = 0; GS.sub = 0; GS.keys = GS.prevKeys = 0; GS.cam = +(Q.get('cam') || 0); CAMSEQ = GS.cam === 1 ? 3 : GS.cam === 2 ? 4 : 0; CHASE_LV = 0; GS.lapBad = 0; GS.cutS = VEH.s; GS.lapEndT = 0; GS.chaseInit = false; GS.tvCur = -1; GS.cut = true;
   if (typeof fxReset === 'function') fxReset();
   GS.lapSeen = GS.lapMax = 0; LAP[0] = LAP[1] = LAP[3] = 0;
   GS.alpha = 1; gamePose(); gameCamera();
@@ -137,13 +142,21 @@ function gameStep() {
     GS.prevKeys = GS.keys; GS.keys = k; GS.tick60++;
     const edge = k & ~GS.prevKeys;
     if ((k ^ GS.prevKeys) & K_V) { GS.cut = true; GS.chaseInit = false; }   // olhar para trás é um corte de câmera
-    if (edge & K_C) { GS.cam = (GS.cam + 1) % 3; GS.cut = true; GS.chaseInit = false; GS.tvCur = -1; }
+    if (edge & K_C) { CAMSEQ = (CAMSEQ + 1) % 5; GS.cam = CAMMAP[CAMSEQ][0]; CHASE_LV = CAMMAP[CAMSEQ][1]; GS.cut = true; GS.chaseInit = false; GS.tvCur = -1; }
     if (edge & K_R) { // devolve o carro à pista: no eixo, alinhado, parado
       const s = VEH.s; vehicleReset(s, clamp(VEH.d, -2, 2), 0); GS.cut = true; GS.chaseInit = false;
+      GS.lapBad = GS.lapBad || 1; GS.cutS = VEH.s;   // MOD (fork): voltar à pista com R suja a volta
     }
   }
   GS.sub++;
   vehicleStep(GS.keys);
+  // MOD (fork): regras de volta válida, no espírito dos limites de pista da F1.
+  // Zebra pode. Se as quatro rodas ficam fora do asfalto/zebra (grama, brita...), a volta é invalidada; um salto grande de posição
+  // ao longo da pista (atalho) também.
+  { const Zn = VEH.wzone; let on = 0; for (let i = 0; i < 4; i++) { const zz = Zn[i]; if (zz === ZONE.ASPHALT || zz === ZONE.KERB || zz === ZONE.PIT) on++; }
+    if (on === 0 && GS.lapBad === 0) GS.lapBad = 2;
+    let dsC = VEH.s - GS.cutS; if (dsC > TRK.L / 2) dsC -= TRK.L; else if (dsC < -TRK.L / 2) dsC += TRK.L; GS.cutS = VEH.s;
+    if ((dsC > 12 || dsC < -12) && GS.lapBad === 0) GS.lapBad = 3; }
   if (VEH.laps !== GS.lapSeen) lapCross();
   if (GS.fxOn && typeof fxStep === 'function') fxStep();
 }
@@ -160,8 +173,12 @@ function lapCross() {
   const V = VEH;
   if (V.laps > GS.lapMax) {
     const st = V.vx * PHYS_DT, fr = st > 1e-6 ? V.s / st : 0, t = V.time - (fr < 0 ? 0 : fr > 1 ? 1 : fr) * PHYS_DT;
-    if (LAP[3] === 1) { const lt = t - LAP[0]; LAP[1] = lt; if (!GS.replayOn && (LAP[2] === 0 || lt < LAP[2])) { LAP[2] = lt; GS.lapNew = true; } }
-    LAP[0] = t; LAP[3] = 1; GS.lapMax = V.laps;
+    if (LAP[3] === 1) {
+      const lt = t - LAP[0];
+      if (GS.lapBad) { LAP[1] = 0; GS.lapEndT = RT[0] + 5; }   // MOD (fork): volta inválida não tem tempo e não vira melhor volta
+      else { LAP[1] = lt; if (!GS.replayOn && (LAP[2] === 0 || lt < LAP[2])) { LAP[2] = lt; GS.lapNew = true; } }
+    }
+    LAP[0] = t; LAP[3] = 1; GS.lapMax = V.laps; GS.lapBad = 0;
   }
   GS.lapSeen = V.laps;
 }
@@ -227,11 +244,11 @@ function gameCamera() {
     let dy = tgt - GS.chaseYaw; while (dy > PI) dy -= TAU; while (dy < -PI) dy += TAU;
     GS.chaseYaw += dy * (1 - Math.exp(-dt * 5.5)); GS.chaseY += (GS.cy - GS.chaseY) * (1 - Math.exp(-dt * 7));
     // (os fatores lb abaixo valem 1 olhando para a frente: a conta fica bit a bit a de antes)
-    const dist = 5.3 + GS.speed * 0.022, cc = Math.cos(GS.chaseYaw), ss = Math.sin(GS.chaseYaw);
-    const ex = GS.cx + c * 0.2 * lb - cc * dist * lb, ez = GS.cz + s * 0.2 * lb - ss * dist * lb; let ey = GS.chaseY + 1.62 - V.gPitch * dist * 0.6;
+    const LV = CHASE_LVS[CHASE_LV], dist = LV[0] + GS.speed * 0.022, cc = Math.cos(GS.chaseYaw), ss = Math.sin(GS.chaseYaw);
+    const ex = GS.cx + c * 0.2 * lb - cc * dist * lb, ez = GS.cz + s * 0.2 * lb - ss * dist * lb; let ey = GS.chaseY + LV[1] - V.gPitch * dist * 0.6;
     _gq[0] = ex; _gq[1] = ez; hfAtQ(_gq); if (ey < _gq[6] + 0.55) ey = _gq[6] + 0.55;
     let rl = -V.ay * 0.004; rl = rl < -0.05 ? -0.05 : rl > 0.05 ? 0.05 : rl;
-    q[0] = ex; q[1] = ey; q[2] = ez; q[3] = GS.cx + c * 1.6 * lb; q[4] = GS.cy + 0.95 + V.gPitch * 1.6; q[5] = GS.cz + s * 1.6 * lb; q[6] = 0.93 + (GS.speed < 50 ? GS.speed : 50) * 0.0042; q[7] = rl;
+    q[0] = ex; q[1] = ey; q[2] = ez; q[3] = GS.cx + c * LV[2] * lb; q[4] = GS.cy + LV[3] + V.gPitch * LV[2]; q[5] = GS.cz + s * LV[2] * lb; q[6] = 0.93 + (GS.speed < 50 ? GS.speed : 50) * 0.0042; q[7] = rl;
   } else if (GS.cam === 1) {
     // capô: presa à carroceria
     const B = GS.body;

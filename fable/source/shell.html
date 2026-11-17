@@ -29,6 +29,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font:14px/1.4 -ap
 #ui .bt{margin-top:1.5em}
 #ui button{font:inherit;font-size:1.15em;font-weight:600;color:#fff;background:#d8351c;border:0;border-radius:.5em;padding:.6em 2em;margin:0 .4em;cursor:pointer}
 #ui button+button{background:rgba(255,255,255,.16)}
+#vol{display:none;position:absolute;left:50%;top:8.5vh;transform:translateX(-50%);padding:.45em 1.1em;border-radius:1.2em;background:rgba(216,53,28,.88);color:#fff;font-weight:600;letter-spacing:.04em;white-space:nowrap;pointer-events:none;font-size:clamp(11px,1.72vh,17px)}
 #ui button:focus-visible{outline:2px solid #fff;outline-offset:2px}
 </style>
 </head>
@@ -36,7 +37,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font:14px/1.4 -ap
 <canvas id="c"></canvas>
 <div id="msg">carregando…</div>
 <div id="hint">W acelera · S freia/ré · A/D faz curvas · Espaço freio de mão · C câmera · R volta à pista</div>
-<canvas id="hg"></canvas><canvas id="ht"></canvas><canvas id="hs"></canvas><div id="tag"></div>
+<canvas id="hg"></canvas><canvas id="ht"></canvas><canvas id="hs"></canvas><div id="tag"></div><div id="vol"></div>
 <div id="ui"><div>
 <h1>Uno com escada</h1>
 <p class="sub">Fiat Uno Mille EP 1996 · circuito</p>
@@ -49,7 +50,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font:14px/1.4 -ap
 <tr><td>Espaço</td><td>freio de mão</td></tr>
 <tr><td>C</td><td>troca a câmera</td></tr>
 <tr><td>V (segurar)</td><td>olha para trás</td></tr>
-<tr><td>R</td><td>devolve o carro à pista</td></tr>
+<tr><td>R</td><td>devolve o carro à pista (a volta não conta)</td></tr>
 <tr><td>Esc</td><td>pausa e abre este menu</td></tr>
 </table></div>
 <div><h2>Controle</h2><table>
@@ -59,7 +60,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font:14px/1.4 -ap
 <tr><td>A</td><td>freio de mão</td></tr>
 <tr><td>Y</td><td>troca a câmera</td></tr>
 <tr><td>RB (segurar)</td><td>olha para trás</td></tr>
-<tr><td>X</td><td>devolve o carro à pista</td></tr>
+<tr><td>X</td><td>devolve o carro à pista (a volta não conta)</td></tr>
 <tr><td>Start</td><td>abre este menu</td></tr>
 </table></div>
 <div><h2>Ferramentas</h2><table>
@@ -68,10 +69,10 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font:14px/1.4 -ap
 <tr><td>B</td><td>benchmark (volta roteirizada de 60 s)</td></tr>
 <tr><td>F</td><td>assistir à volta roteirizada</td></tr>
 <tr><td>1 a 6</td><td>poses fixas</td></tr>
-<tr><td colspan="2" style="font-weight:400;color:#ddd;opacity:.75;padding-top:.5em">Câmbio automático · a volta conta<br>ao cruzar a linha de largada</td></tr>
+<tr><td colspan="2" style="font-weight:400;color:#ddd;opacity:.75;padding-top:.5em">Câmbio automático · a volta conta<br>ao cruzar a linha de largada<br>Volta inválida: usar R, ou ficar com as 4 rodas<br>fora do asfalto e da zebra (atalho)</td></tr>
 </table></div>
 </div>
-<div class="bt"><button id="b0">Começar</button><button id="b1">Benchmark</button></div>
+<div class="bt"><button id="b0">Começar</button><button id="b2">Reiniciar a volta</button><button id="b1">Benchmark</button></div>
 </div></div>
 <script>
 /*__CODE__*/

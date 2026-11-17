@@ -2,14 +2,15 @@
 // poses, teclas de ferramenta e leitura do controle. Nas ferramentas de trabalho/ (captura, poses, teste, medição) nada
 // disto é ligado: sem menu, sem painel, sem som.
 const ST = { INICIO: 0, JOGO: 1, PAUSA: 2, BENCH: 3, FITA: 4, RESULT: 5, POSE: 6 };
-const UI = { st: ST.INICIO, back: ST.JOGO, el: null, tag: null, res: null, b0: null, b1: null, bench: null, benchN: 0, padPrev: 0, padN: 0, pose: -1, stats: false, warm: false };
+const UI = { st: ST.INICIO, back: ST.JOGO, el: null, tag: null, res: null, b0: null, b1: null, b2: null, vol: null, volTxt: '', bench: null, benchN: 0, padPrev: 0, padN: 0, pose: -1, stats: false, warm: false };
 const $ = id => document.getElementById(id);
 function uiInit() {
-  UI.el = $('ui'); UI.tag = $('tag'); UI.res = $('res'); UI.b0 = $('b0'); UI.b1 = $('b1');
+  UI.el = $('ui'); UI.tag = $('tag'); UI.res = $('res'); UI.b0 = $('b0'); UI.b1 = $('b1'); UI.b2 = $('b2'); UI.vol = $('vol');
   hudInit(); uiWarmup();
   try { const b = +localStorage.getItem('uno-melhor'); if (b > 20 && b < 600) LAP[2] = b; } catch (e) { /* sem armazenamento local: a melhor volta vale só nesta sessão */ }
   UI.b0.onclick = () => { if (UI.st === ST.INICIO) { sndStart(); uiSet(ST.JOGO); } else uiResume(); };
   UI.b1.onclick = () => benchStart();
+  UI.b2.onclick = () => uiDrive();   // MOD (fork): reinicia a volta (carro no grid, cronômetro, última volta e aviso zerados; a melhor volta fica)
   addEventListener('keydown', uiKey);
   document.addEventListener('visibilitychange', () => { if (document.hidden && (UI.st === ST.JOGO || UI.st === ST.FITA || UI.st === ST.BENCH)) uiPause(); });
   addEventListener('gamepadconnected', padCount); addEventListener('gamepaddisconnected', padCount);
@@ -21,7 +22,7 @@ function uiSet(st) {
   const menu = st === ST.INICIO || st === ST.PAUSA || st === ST.RESULT;
   UI.st = st; UI.el.style.display = menu ? 'flex' : 'none'; UI.el.className = st === ST.INICIO ? 'ini' : '';
   UI.b0.textContent = st === ST.INICIO ? 'Começar' : st === ST.RESULT ? 'Voltar a dirigir' : 'Continuar';
-  UI.b1.style.display = st === ST.INICIO ? 'none' : ''; UI.b1.textContent = st === ST.RESULT ? 'Repetir benchmark' : 'Benchmark';
+  UI.b1.style.display = st === ST.INICIO ? 'none' : ''; UI.b2.style.display = st === ST.PAUSA ? '' : 'none'; UI.volTxt = null; UI.vol.style.display = 'none'; UI.b1.textContent = st === ST.RESULT ? 'Repetir benchmark' : 'Benchmark';
   UI.res.style.display = st === ST.RESULT ? 'block' : 'none';
   UI.tag.textContent = st === ST.BENCH ? 'Benchmark: volta roteirizada de 60 s · Esc cancela' : st === ST.FITA ? 'Volta roteirizada · R assume o volante · Esc menu' : st === ST.POSE ? 'Pose ' + (UI.pose + 1) + ' · ' + POSES[UI.pose].nome + ' · 1 a 6 trocam · Esc volta a dirigir' : '';
   UI.tag.style.display = UI.tag.textContent ? 'block' : 'none';
@@ -121,6 +122,13 @@ function uiFrame() {
   const st = UI.st;
   return st === ST.INICIO || st === ST.PAUSA || st === ST.RESULT || st === ST.POSE;
 }
+// MOD (fork): aviso de volta inválida (faixa vermelha no alto da tela)
+const VOLMSG = ['', 'VOLTA INVÁLIDA · voltou à pista com R', 'VOLTA INVÁLIDA · saiu dos limites da pista', 'VOLTA INVÁLIDA · atalho'];
+function volFrame() {
+  const k = GS.lapBad; let t = '';
+  if (k) t = VOLMSG[k]; else if (GS.lapEndT > RT[0]) t = 'A volta anterior foi inválida e não conta';
+  if (t !== UI.volTxt) { UI.volTxt = t; UI.vol.textContent = t; UI.vol.style.display = t ? 'block' : 'none'; }
+}
 // chamado depois de simular e renderizar o quadro
 function uiAfter() {
   const st = UI.st;
@@ -128,6 +136,7 @@ function uiAfter() {
   else {
     if (st === ST.FITA && GS.tick60 >= GS.replay.length) { GS.replayOn = false; uiSet(ST.JOGO); }
     if (HUD.vis) hudFrame();
+    volFrame();
     if (GS.lapNew) { GS.lapNew = false; try { localStorage.setItem('uno-melhor', LAP[2].toFixed(3)); } catch (e) { /* idem */ } }
   }
   if (HUD.stats) hudStatsFrame();

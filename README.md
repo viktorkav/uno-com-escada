@@ -1,5 +1,7 @@
 # Uno com escada
 
+> **Fork com modificações.** O projeto original é do [ViktorKav](https://github.com/viktorkav/uno-com-escada) (jogo gerado por Claude Fable 5.2 e Claude Opus 5.5, a partir do pedido do vídeo do canal [ViktorKav](https://www.youtube.com/@vkav)). As alterações deste fork foram feitas com autorização do autor, por [Mateus Machado](https://github.com/owens1822) com ajuda do Claude, e estão descritas em [Modificações deste fork](#modificações-deste-fork). Todo o crédito pelo jogo é do autor original.
+
 **Um Fiat Uno Mille EP 1996, com uma escada de alumínio no teto, para pilotar num circuito de corrida, direto no navegador.**
 
 São duas versões do mesmo jogo, feitas por dois modelos de IA a partir do mesmo pedido: uma pelo Claude Fable 5.2 e outra pelo Claude Opus 5.5. Cada versão é um único `index.html`. Carro, pista, mata, céu e som saem do código: nenhuma delas usa textura, modelo 3D, áudio gravado, engine ou biblioteca 3D.
@@ -119,6 +121,14 @@ Cada comando reescreve o `index.html` da versão.
 | `js/som.js` | O som, sintetizado na hora |
 | `js/painel.js` | O painel do jogo |
 | `js/renderer.js`, `shaders/` | O renderizador e os shaders |
+
+## Modificações deste fork
+
+Alterações só na versão do **Fable** (`fable/source` e o `fable/index.html` gerado a partir dela):
+
+- **Câmeras:** a tecla `C` agora passa por 5 câmeras: perseguição nível 1 (a original), perseguição nível 2 (mais alta e mais distante), perseguição nível 3 (a mais alta, mirando mais à frente para mostrar o horizonte da pista), capô e TV. Os valores dos níveis ficam em `CHASE_LVS`, em `fable/source/js/45_game.js`.
+- **Reiniciar a volta:** botão no menu do `Esc` que devolve o carro ao grid e zera cronômetro, última volta e avisos (a melhor volta fica salva).
+- **Volta válida, inspirada nos limites de pista da F1:** a volta é invalidada se o jogador usar `R` (ou `X` no controle) para voltar à pista, se as quatro rodas ficarem fora do asfalto e da zebra, ou se a posição dá um salto grande ao longo da pista (atalho). A zebra pode. Volta inválida fica sem tempo, não vira melhor volta, e um aviso vermelho aparece no alto da tela.
 
 ## Licença
 
